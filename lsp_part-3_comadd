@@ -1,0 +1,291 @@
+package leaderboardapp; // Package declaration for organizing related classes
+
+import javax.swing.*; // Swing components for GUI
+import java.awt.*; // Layout management
+import java.awt.event.*; // Event handling
+import java.io.*; // File I/O
+import java.time.LocalDate; // Date tracking
+import java.util.*; // Collections, ArrayList, HashMap, Queue, etc.
+
+/**
+ * LeaderboardAppSwing manages the GUI application for a leaderboard system.
+ * It supports adding, storing, sorting, searching, and displaying high scores.
+ */
+public class LeaderboardAppSwing {
+
+    // Swing GUI components
+    private JFrame frame; // Main application window
+    private JTextField nameField, scoreField; // Input fields for name and score
+    private final DefaultListModel<String> listModel = new DefaultListModel<>(); // Model for displaying list of scores
+    private final JList<String> scoreList = new JList<>(listModel); // List UI to show scores
+
+    // Data structures for storing score entries
+    private final ScoreLinkedList scores = new ScoreLinkedList(); // Custom linked list for score storage
+    private final ScoreBST scoreTree = new ScoreBST(); // Binary Search Tree for fast search by name
+    private final HashMap<String, ScoreEntry> scoreMap = new HashMap<>(); // HashMap for O(1) access by name
+
+    private final Queue<ScoreEntry> pendingQueue = new LinkedList<>(); // Queue to batch score entries before writing
+
+    public static void main(String[] args) {
+        // Launch the GUI safely using the Swing event-dispatching thread
+        SwingUtilities.invokeLater(LeaderboardAppSwing::new);
+    }
+
+    /**
+     * Constructor initializes and shows the GUI
+     */
+    public LeaderboardAppSwing() {
+        frame = new JFrame("Leaderboard System");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 300);
+
+        nameField = new JTextField(10); // Name input
+        scoreField = new JTextField(5); // Score input
+        JButton submitButton = new JButton("Submit"); // Button to submit scores
+        JButton searchButton = new JButton("Search"); // Button to search score by name
+
+        // Create input panel with fields and buttons
+        JPanel inputPanel = new JPanel();
+        inputPanel.add(new JLabel("Name:"));
+        inputPanel.add(nameField);
+        inputPanel.add(new JLabel("Score:"));
+        inputPanel.add(scoreField);
+        inputPanel.add(submitButton);
+        inputPanel.add(searchButton);
+
+        // Add panels to the frame
+        frame.setLayout(new BorderLayout());
+        frame.add(inputPanel, BorderLayout.NORTH);
+        frame.add(new JScrollPane(scoreList), BorderLayout.CENTER);
+
+        // Event handler for submitting scores
+        submitButton.addActionListener(e -> {
+            try {
+                String name = nameField.getText().trim();
+                int score = Integer.parseInt(scoreField.getText().trim());
+                ScoreEntry entry = new ScoreEntry(name, score, LocalDate.now());
+
+                scores.add(entry); // Add to linked list
+                scoreTree.insert(entry); // Insert into BST
+                scoreMap.put(name, entry); // Add to hash table
+
+                saveScores(); // Persist to file
+                refreshLeaderboard(); // Update GUI list
+
+                nameField.setText(""); // Clear inputs
+                scoreField.setText("");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(frame, "Invalid score. Enter a number.");
+            }
+        });
+
+        // Event handler for searching a player by name
+        searchButton.addActionListener(e -> {
+            String name = nameField.getText().trim();
+            ScoreEntry found = scoreTree.findByName(name); // Efficient search via BST
+            if (found != null) {
+                JOptionPane.showMessageDialog(frame, "Found in Tree:\n" + found);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Player not found.");
+            }
+        });
+
+        loadScores(); // Load existing scores from file
+        refreshLeaderboard(); // Show loaded scores
+        frame.setVisible(true); // Display GUI
+    }
+
+    /**
+     * Refreshes the leaderboard list using merge sort.
+     * Sorts scores in descending order before displaying.
+     */
+    private void refreshLeaderboard() {
+        ArrayList<ScoreEntry> scoreList = scores.toArrayList();
+        mergeSort(scoreList, 0, scoreList.size() - 1); // Sort scores descending
+        listModel.clear(); // Clear previous list
+        for (ScoreEntry entry : scoreList) {
+            listModel.addElement(entry.toString()); // Add sorted entries to list
+        }
+    }
+
+    /**
+     * Saves all scores to a file, each on a new line
+     */
+    private void saveScores() {
+        try (PrintWriter writer = new PrintWriter("scores.txt")) {
+            for (ScoreEntry entry : scores.toArrayList()) {
+                writer.println(entry.name + "," + entry.score + "," + entry.date);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Loads scores from file and rebuilds data structures (LinkedList, BST, HashMap)
+     */
+    private void loadScores() {
+        File file = new File("scores.txt");
+        if (!file.exists()) return;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            scores.clear();
+            scoreTree.clear();
+            scoreMap.clear();
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 3) {
+                    ScoreEntry entry = new ScoreEntry(parts[0], Integer.parseInt(parts[1]), LocalDate.parse(parts[2]));
+                    scores.add(entry);
+                    scoreTree.insert(entry);
+                    scoreMap.put(entry.name, entry);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Merge Sort algorithm: O(n log n)
+    // Used to sort score entries by score in descending order
+    private void mergeSort(ArrayList<ScoreEntry> list, int left, int right) {
+        if (left < right) {
+            int mid = (left + right) / 2;
+            mergeSort(list, left, mid);
+            mergeSort(list, mid + 1, right);
+            merge(list, left, mid, right);
+        }
+    }
+
+    // Merge step for merge sort
+    private void merge(ArrayList<ScoreEntry> list, int left, int mid, int right) {
+        ArrayList<ScoreEntry> leftList = new ArrayList<>(list.subList(left, mid + 1));
+        ArrayList<ScoreEntry> rightList = new ArrayList<>(list.subList(mid + 1, right + 1));
+
+        int i = 0, j = 0, k = left;
+        while (i < leftList.size() && j < rightList.size()) {
+            if (leftList.get(i).compareTo(rightList.get(j)) <= 0) {
+                list.set(k++, leftList.get(i++));
+            } else {
+                list.set(k++, rightList.get(j++));
+            }
+        }
+
+        while (i < leftList.size()) list.set(k++, leftList.get(i++));
+        while (j < rightList.size()) list.set(k++, rightList.get(j++));
+    }
+
+    /**
+     * ScoreEntry represents one leaderboard record.
+     */
+    static class ScoreEntry implements Comparable<ScoreEntry> {
+        String name;
+        int score;
+        LocalDate date;
+
+        public ScoreEntry(String name, int score, LocalDate date) {
+            this.name = name;
+            this.score = score;
+            this.date = date;
+        }
+
+        @Override
+        public int compareTo(ScoreEntry other) {
+            return Integer.compare(other.score, this.score); // Descending sort
+        }
+
+        @Override
+        public String toString() {
+            return name + " - " + score + " - " + date;
+        }
+    }
+
+    /**
+     * Custom singly linked list to store ScoreEntry objects.
+     */
+    static class ScoreLinkedList {
+        private ScoreNode head;
+
+        public void add(ScoreEntry entry) {
+            ScoreNode newNode = new ScoreNode(entry);
+            if (head == null) {
+                head = newNode;
+            } else {
+                ScoreNode current = head;
+                while (current.next != null) current = current.next;
+                current.next = newNode;
+            }
+        }
+
+        public ArrayList<ScoreEntry> toArrayList() {
+            ArrayList<ScoreEntry> list = new ArrayList<>();
+            ScoreNode current = head;
+            while (current != null) {
+                list.add(current.data);
+                current = current.next;
+            }
+            return list;
+        }
+
+        public void clear() {
+            head = null;
+        }
+    }
+
+    /**
+     * ScoreNode is a node in the linked list.
+     */
+    static class ScoreNode {
+        ScoreEntry data;
+        ScoreNode next;
+
+        public ScoreNode(ScoreEntry data) {
+            this.data = data;
+        }
+    }
+
+    /**
+     * Binary Search Tree to allow fast lookup of scores by name.
+     * Useful for efficient searching and future expansion (e.g., range queries).
+     */
+    static class ScoreBST {
+        private class Node {
+            ScoreEntry data;
+            Node left, right;
+
+            Node(ScoreEntry data) {
+                this.data = data;
+            }
+        }
+
+        private Node root;
+
+        public void insert(ScoreEntry entry) {
+            root = insertRec(root, entry);
+        }
+
+        private Node insertRec(Node root, ScoreEntry entry) {
+            if (root == null) return new Node(entry);
+            if (entry.name.compareTo(root.data.name) < 0)
+                root.left = insertRec(root.left, entry);
+            else if (entry.name.compareTo(root.data.name) > 0)
+                root.right = insertRec(root.right, entry);
+            return root;
+        }
+
+        public ScoreEntry findByName(String name) {
+            Node current = root;
+            while (current != null) {
+                int cmp = name.compareTo(current.data.name);
+                if (cmp == 0) return current.data;
+                current = (cmp < 0) ? current.left : current.right;
+            }
+            return null;
+        }
+
+        public void clear() {
+            root = null;
+        }
+    }
+}
