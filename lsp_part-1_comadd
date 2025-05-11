@@ -1,0 +1,226 @@
+/**
+ * LeaderboardAppSwing.java
+ * -------------------------
+ * This Java Swing application implements a basic leaderboard system.
+ * Users can input their name and score; the system automatically saves and sorts entries.
+ * All scores are stored in a local file ("scores.txt") and sorted using Merge Sort (descending).
+ * 
+ * Concepts used:
+ * - Java Swing GUI
+ * - File I/O for persistence
+ * - Merge Sort algorithm
+ * - Java ArrayList for dynamic storage
+ * - Inner class with Comparable interface
+ */
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
+
+public class LeaderboardAppSwing {
+
+    // GUI Components
+    private final JFrame frame = new JFrame("Leaderboard System");
+    private final JTextField nameField = new JTextField(10);  // User input for name
+    private final JTextField scoreField = new JTextField(5);  // User input for score
+    private final DefaultListModel<String> listModel = new DefaultListModel<>();  // Model for displaying leaderboard
+    private final JList<String> scoreList = new JList<>(listModel);  // GUI list to show scores
+
+    // In-memory list of scores (loaded from file and updated on submission)
+    private final ArrayList<ScoreEntry> scores = new ArrayList<>();
+
+    public static void main(String[] args) {
+        // Launch the GUI on the Event Dispatch Thread
+        SwingUtilities.invokeLater(() -> new LeaderboardAppSwing().createAndShowGUI());
+    }
+
+    /**
+     * Sets up and shows the main GUI.
+     */
+    private void createAndShowGUI() {
+        JButton submitButton = new JButton("Submit");  // Button to add new score
+
+        // Layout for the name/score input area
+        JPanel inputPanel = new JPanel();
+        inputPanel.add(new JLabel("Name:"));
+        inputPanel.add(nameField);
+        inputPanel.add(new JLabel("Score:"));
+        inputPanel.add(scoreField);
+        inputPanel.add(submitButton);
+
+        // Scrollable list to show the leaderboard entries
+        JScrollPane scrollPane = new JScrollPane(scoreList);
+        scrollPane.setPreferredSize(new Dimension(380, 200));
+
+        // Set up the frame layout and add components
+        frame.setLayout(new BorderLayout());
+        frame.add(inputPanel, BorderLayout.NORTH);  // Top of the window
+        frame.add(scrollPane, BorderLayout.CENTER); // Center of the window
+
+        // Attach logic to button click
+        submitButton.addActionListener(e -> addScore());
+
+        // Load previous scores from file into memory
+        loadScores();
+        refreshLeaderboard();  // Sort and display
+
+        // Frame settings
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 300);
+        frame.setVisible(true);  // Show the window
+    }
+
+    /**
+     * Adds a new score to the leaderboard.
+     * Gets input, validates it, saves, sorts, and refreshes UI.
+     */
+    private void addScore() {
+        String name = nameField.getText().trim();
+        String scoreText = scoreField.getText().trim();
+
+        // Make sure both fields are filled
+        if (name.isEmpty() || scoreText.isEmpty()) {
+            showError("Both name and score are required.");
+            return;
+        }
+
+        try {
+            int score = Integer.parseInt(scoreText);  // Validate score is numeric
+            ScoreEntry entry = new ScoreEntry(name, score, LocalDate.now());  // Timestamped entry
+
+            scores.add(entry);  // Add to in-memory list
+            saveScores();       // Save entire list to file
+            refreshLeaderboard();  // Sort and update UI
+
+            // Clear input fields for next entry
+            nameField.setText("");
+            scoreField.setText("");
+
+        } catch (NumberFormatException e) {
+            showError("Score must be a number.");  // Handle non-numeric input
+        }
+    }
+
+    /**
+     * Sorts scores and updates the display.
+     */
+    private void refreshLeaderboard() {
+        mergeSort(scores, 0, scores.size() - 1);  // Sort using Merge Sort (descending)
+        listModel.clear();  // Clear previous display
+        for (ScoreEntry entry : scores) {
+            listModel.addElement(entry.toString());  // Add each formatted entry to list
+        }
+    }
+
+    /**
+     * Saves the scores to a local file in CSV format.
+     * Each line: name,score,date
+     */
+    private void saveScores() {
+        try (PrintWriter writer = new PrintWriter("scores.txt")) {
+            for (ScoreEntry entry : scores) {
+                writer.println(entry.name + "," + entry.score + "," + entry.date);
+            }
+        } catch (IOException e) {
+            showError("Error saving scores.");
+        }
+    }
+
+    /**
+     * Loads the scores from the "scores.txt" file, if it exists.
+     */
+    private void loadScores() {
+        File file = new File("scores.txt");
+        if (!file.exists()) return;  // No file to load
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            scores.clear();  // Clear any existing in-memory scores
+
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 3) {
+                    // Parse each line and create a ScoreEntry
+                    scores.add(new ScoreEntry(parts[0], Integer.parseInt(parts[1]), LocalDate.parse(parts[2])));
+                }
+            }
+        } catch (IOException e) {
+            showError("Error loading scores.");
+        }
+    }
+
+    /**
+     * Utility method to show error dialogs.
+     */
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(frame, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    /**
+     * Performs a Merge Sort on the scores list.
+     * Sorting is done in descending order based on score.
+     * Time Complexity: O(n log n)
+     */
+    private void mergeSort(ArrayList<ScoreEntry> list, int left, int right) {
+        if (left < right) {
+            int mid = (left + right) / 2;
+            mergeSort(list, left, mid);
+            mergeSort(list, mid + 1, right);
+            merge(list, left, mid, right);
+        }
+    }
+
+    /**
+     * Merges two halves of the list into sorted order (descending).
+     */
+    private void merge(ArrayList<ScoreEntry> list, int left, int mid, int right) {
+        ArrayList<ScoreEntry> leftList = new ArrayList<>(list.subList(left, mid + 1));
+        ArrayList<ScoreEntry> rightList = new ArrayList<>(list.subList(mid + 1, right + 1));
+
+        int i = 0, j = 0, k = left;
+
+        // Compare and insert the higher score first (descending order)
+        while (i < leftList.size() && j < rightList.size()) {
+            if (leftList.get(i).compareTo(rightList.get(j)) <= 0) {
+                list.set(k++, leftList.get(i++));
+            } else {
+                list.set(k++, rightList.get(j++));
+            }
+        }
+
+        // Copy any remaining items
+        while (i < leftList.size()) list.set(k++, leftList.get(i++));
+        while (j < rightList.size()) list.set(k++, rightList.get(j++));
+    }
+
+    /**
+     * Represents a score entry with name, score, and date.
+     * Implements Comparable to allow sorting by score (descending).
+     */
+    static class ScoreEntry implements Comparable<ScoreEntry> {
+        String name;
+        int score;
+        LocalDate date;
+
+        public ScoreEntry(String name, int score, LocalDate date) {
+            this.name = name;
+            this.score = score;
+            this.date = date;
+        }
+
+        @Override
+        public int compareTo(ScoreEntry other) {
+            // Higher scores come first
+            return Integer.compare(other.score, this.score);
+        }
+
+        @Override
+        public String toString() {
+            // Format for display in the list
+            return name + " - " + score + " - " + date;
+        }
+    }
+}
