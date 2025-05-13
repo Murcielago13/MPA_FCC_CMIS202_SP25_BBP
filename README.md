@@ -3,9 +3,11 @@
 [Leaderboard System]
 
 
+
 (Who is this for?)
 
 -This software is for game developers, students, and hobbyists who want to integrate a simple high score or leaderboard system into their games or applications.
+
 
 
 (What is the purpose?)
@@ -15,11 +17,13 @@
 -It saves player names, scores, game names, and the date the score was achieved, allowing for game-specific views and comprehensive data administration.
 
 
+
 (Where and When is it used?)
 
 -This can be used in desktop-based Java games or learning environments where keeping a persistent record of scores is necessary.
 
 -It is designed to run on any desktop with Java installed and can be used after each game session or during game runtime for score submissions and viewing.
+
 
 
 (How does it work?)
@@ -35,6 +39,7 @@
 -Internally, a custom singly linked list is used for one representation of score entries, a binary search tree (BST) allows for efficient player name lookups, and a hash table (HashMap) provides constant-time access to specific score records (player-game unique).
 
 -All scores are saved to a local file ("scores.txt") for persistence, and the leaderboard displays entries sorted by score (descending), then date (most recent), then player name, using the Merge Sort algorithm.
+
 
 
 (Why use this system?)
